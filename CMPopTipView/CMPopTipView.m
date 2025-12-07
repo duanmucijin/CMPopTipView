@@ -130,41 +130,44 @@
         CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding+_pointerSize, _targetPoint.y-_pointerSize);
     }
     else if (_pointDirection == PointDirectionLeft) {
-        // pointer on right edge pointing to target (point is relative inside view)
+        // 气泡在 target 左侧，箭头在气泡右边，箭头应指向右（指向 target）
+        // p 是箭头尖的坐标（相对 self）
         CGFloat pX = _targetPoint.x + _sidePadding;
         CGFloat pY = _targetPoint.y;
-        // start at pointer tip
+        // 从箭头尖开始，向右画到箭头基座两点（向右指）
         CGPathMoveToPoint(bubblePath, NULL, pX, pY);
-        CGPathAddLineToPoint(bubblePath, NULL, pX - _pointerSize, pY - _pointerSize);
-
-        // draw bubble clockwise from right-top corner
+        CGPathAddLineToPoint(bubblePath, NULL, pX + _pointerSize, pY - _pointerSize);
+        
+        // 绘制气泡顺时针：右上 -> 右下 -> 左下 -> 左上 -> 回到箭头基座
         CGPathAddArcToPoint(bubblePath, NULL,
                             bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y,
-                            bubbleRect.origin.x + bubbleRect.size.width - _cornerRadius, bubbleRect.origin.y,
-                            _cornerRadius);
-        CGPathAddArcToPoint(bubblePath, NULL,
-                            bubbleRect.origin.x, bubbleRect.origin.y,
-                            bubbleRect.origin.x, bubbleRect.origin.y + _cornerRadius,
-                            _cornerRadius);
-        CGPathAddArcToPoint(bubblePath, NULL,
-                            bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height,
-                            bubbleRect.origin.x + _cornerRadius, bubbleRect.origin.y + bubbleRect.size.height,
+                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y + _cornerRadius,
                             _cornerRadius);
         CGPathAddArcToPoint(bubblePath, NULL,
                             bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y + bubbleRect.size.height,
-                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y + bubbleRect.size.height - _cornerRadius,
+                            bubbleRect.origin.x + bubbleRect.size.width - _cornerRadius, bubbleRect.origin.y + bubbleRect.size.height,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height,
+                            bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height - _cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y,
+                            bubbleRect.origin.x + _cornerRadius, bubbleRect.origin.y,
                             _cornerRadius);
 
-        // close back to pointer base
-        CGPathAddLineToPoint(bubblePath, NULL, pX - _pointerSize, pY + _pointerSize);
+        // 回到箭头另一基座点（向右指的下基座）
+        CGPathAddLineToPoint(bubblePath, NULL, pX + _pointerSize, pY + _pointerSize);
     }
     else if (_pointDirection == PointDirectionRight) {
-        // pointer on left edge pointing to target
+        // 气泡在 target 右侧，箭头在气泡左边，箭头应指向左（指向 target）
         CGFloat pX = _targetPoint.x + _sidePadding;
         CGFloat pY = _targetPoint.y;
+        // 从箭头尖开始，向左画到箭头基座两点（向左指）
         CGPathMoveToPoint(bubblePath, NULL, pX, pY);
-        CGPathAddLineToPoint(bubblePath, NULL, pX + _pointerSize, pY - _pointerSize);
+        CGPathAddLineToPoint(bubblePath, NULL, pX - _pointerSize, pY - _pointerSize);
 
+        // 绘制气泡逆时针/顺时针（从左上角开始以保证路径闭合），保持与原样式一致
         CGPathAddArcToPoint(bubblePath, NULL,
                             bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height,
                             bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height - _cornerRadius,
@@ -182,7 +185,8 @@
                             bubbleRect.origin.x + bubbleRect.size.width - _cornerRadius, bubbleRect.origin.y + bubbleRect.size.height,
                             _cornerRadius);
 
-        CGPathAddLineToPoint(bubblePath, NULL, pX + _pointerSize, pY + _pointerSize);
+        // 回到箭头另一基座点（向左指的下基座）
+        CGPathAddLineToPoint(bubblePath, NULL, pX - _pointerSize, pY + _pointerSize);
     }
 
     CGPathCloseSubpath(bubblePath);
