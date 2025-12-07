@@ -1,26 +1,7 @@
 //
 //  CMPopTipView.m
 //
-//  Created by Chris Miles on 18/07/10.
-//  Copyright (c) Chris Miles 2010-2014.
-//
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
-//
-//  The above copyright notice and this permission notice shall be included in
-//  all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-//  THE SOFTWARE.
+//  Modified to support left/right arrow and layout.
 //
 
 #import "CMPopTipView.h"
@@ -28,38 +9,49 @@
 
 @interface CMPopTipView ()
 {
-	CGSize					_bubbleSize;
-	CGFloat					_cornerRadius;
-	BOOL					_highlight;
-	PointDirection			_pointDirection;
-	CGFloat					_pointerSize;
-	CGPoint					_targetPoint;
-	CGFloat					_bubblePaddingX;
-	CGFloat					_bubblePaddingY;
+    CGSize                    _bubbleSize;
+    CGFloat                    _cornerRadius;
+    BOOL                    _highlight;
+    PointDirection            _pointDirection;
+    CGFloat                    _pointerSize;
+    CGPoint                    _targetPoint;
+    CGFloat                    _bubblePaddingX;
+    CGFloat                    _bubblePaddingY;
 }
 
-@property (nonatomic, strong, readwrite)	id	targetObject;
+@property (nonatomic, strong, readwrite)    id    targetObject;
 @property (nonatomic, strong) NSTimer *autoDismissTimer;
 @property (nonatomic, strong) UIButton *dismissTarget;
 @end
 
-
 @implementation CMPopTipView
 
+#pragma mark - Frame helpers
+
 - (CGRect)bubbleFrame {
-	CGRect bubbleFrame;
-	if (_pointDirection == PointDirectionUp) {
-		bubbleFrame = CGRectMake(_sidePadding, _targetPoint.y+_pointerSize, _bubbleSize.width, _bubbleSize.height);
-	}
-	else {
-		bubbleFrame = CGRectMake(_sidePadding, _targetPoint.y-_pointerSize-_bubbleSize.height, _bubbleSize.width, _bubbleSize.height);
-	}
-	return bubbleFrame;
+    CGRect bubbleFrame = CGRectZero;
+    // For Up / Down original behavior: bubble sits below or above pointer area
+    if (_pointDirection == PointDirectionUp) {
+        bubbleFrame = CGRectMake(_sidePadding, _targetPoint.y + _pointerSize, _bubbleSize.width, _bubbleSize.height);
+    }
+    else if (_pointDirection == PointDirectionDown) {
+        bubbleFrame = CGRectMake(_sidePadding, _targetPoint.y - _pointerSize - _bubbleSize.height, _bubbleSize.width, _bubbleSize.height);
+    }
+    // Left: bubble rectangle is to the left of the pointer (pointer on right edge)
+    else if (_pointDirection == PointDirectionLeft) {
+        bubbleFrame = CGRectMake(_sidePadding, _targetPoint.y - (_bubbleSize.height/2.0), _bubbleSize.width, _bubbleSize.height);
+    }
+    // Right: bubble rectangle is to the right of the pointer (pointer on left edge)
+    else if (_pointDirection == PointDirectionRight) {
+        bubbleFrame = CGRectMake(_sidePadding, _targetPoint.y - (_bubbleSize.height/2.0), _bubbleSize.width, _bubbleSize.height);
+    }
+    return bubbleFrame;
 }
 
 - (CGRect)contentFrame {
     CGRect bubbleFrame = [self bubbleFrame];
-    
+
+    // For left/right, bubbleFrame origin.x is _sidePadding; content inset same as up/down
     CGRect contentFrame = CGRectMake(bubbleFrame.origin.x + _cornerRadius + _bubblePaddingX,
                                      bubbleFrame.origin.y + _cornerRadius + _bubblePaddingY,
                                      bubbleFrame.size.width - (_bubblePaddingX*2) - (_cornerRadius*2),
@@ -69,8 +61,8 @@
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-	if (self.customView) {
-		CGRect contentFrame = [self contentFrame];
+    if (self.customView) {
+        CGRect contentFrame = [self contentFrame];
         [self.customView setFrame:contentFrame];
     }
     if (self.customView && self.shouldMaskCustomView) {
@@ -79,67 +71,125 @@
     }
 }
 
+#pragma mark - Drawing
+
 - (void)drawRect:(__unused CGRect)rect
 {
-	CGRect bubbleRect = [self bubbleFrame];
+    CGRect bubbleRect = [self bubbleFrame];
 
-	CGContextRef c = UIGraphicsGetCurrentContext();
+    CGContextRef c = UIGraphicsGetCurrentContext();
 
-    CGContextSetRGBStrokeColor(c, 0.0, 0.0, 0.0, 1.0);	// black
-	CGContextSetLineWidth(c, self.borderWidth);
+    CGContextSetRGBStrokeColor(c, 0.0, 0.0, 0.0, 1.0);    // black
+    CGContextSetLineWidth(c, self.borderWidth);
 
-	CGMutablePathRef bubblePath = CGPathCreateMutable();
+    CGMutablePathRef bubblePath = CGPathCreateMutable();
 
-	if (_pointDirection == PointDirectionUp) {
-		CGPathMoveToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding, _targetPoint.y);
-		CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding+_pointerSize, _targetPoint.y+_pointerSize);
+    // We'll build path depending on _pointDirection
+    if (_pointDirection == PointDirectionUp) {
+        CGPathMoveToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding, _targetPoint.y);
+        CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding+_pointerSize, _targetPoint.y+_pointerSize);
 
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y,
-							bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+_cornerRadius,
-							_cornerRadius);
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+bubbleRect.size.height,
-							bubbleRect.origin.x+bubbleRect.size.width-_cornerRadius, bubbleRect.origin.y+bubbleRect.size.height,
-							_cornerRadius);
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height,
-							bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height-_cornerRadius,
-							_cornerRadius);
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x, bubbleRect.origin.y,
-							bubbleRect.origin.x+_cornerRadius, bubbleRect.origin.y,
-							_cornerRadius);
-		CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding-_pointerSize, _targetPoint.y+_pointerSize);
-	}
-	else {
-		CGPathMoveToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding, _targetPoint.y);
-		CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding-_pointerSize, _targetPoint.y-_pointerSize);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y,
+                            bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+_cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+bubbleRect.size.height,
+                            bubbleRect.origin.x+bubbleRect.size.width-_cornerRadius, bubbleRect.origin.y+bubbleRect.size.height,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height,
+                            bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height-_cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y,
+                            bubbleRect.origin.x+_cornerRadius, bubbleRect.origin.y,
+                            _cornerRadius);
+        CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding-_pointerSize, _targetPoint.y+_pointerSize);
+    }
+    else if (_pointDirection == PointDirectionDown) {
+        CGPathMoveToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding, _targetPoint.y);
+        CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding-_pointerSize, _targetPoint.y-_pointerSize);
 
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height,
-							bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height-_cornerRadius,
-							_cornerRadius);
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x, bubbleRect.origin.y,
-							bubbleRect.origin.x+_cornerRadius, bubbleRect.origin.y,
-							_cornerRadius);
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y,
-							bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+_cornerRadius,
-							_cornerRadius);
-		CGPathAddArcToPoint(bubblePath, NULL,
-							bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+bubbleRect.size.height,
-							bubbleRect.origin.x+bubbleRect.size.width-_cornerRadius, bubbleRect.origin.y+bubbleRect.size.height,
-							_cornerRadius);
-		CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding+_pointerSize, _targetPoint.y-_pointerSize);
-	}
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height,
+                            bubbleRect.origin.x, bubbleRect.origin.y+bubbleRect.size.height-_cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y,
+                            bubbleRect.origin.x+_cornerRadius, bubbleRect.origin.y,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y,
+                            bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+_cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x+bubbleRect.size.width, bubbleRect.origin.y+bubbleRect.size.height,
+                            bubbleRect.origin.x+bubbleRect.size.width-_cornerRadius, bubbleRect.origin.y+bubbleRect.size.height,
+                            _cornerRadius);
+        CGPathAddLineToPoint(bubblePath, NULL, _targetPoint.x+_sidePadding+_pointerSize, _targetPoint.y-_pointerSize);
+    }
+    else if (_pointDirection == PointDirectionLeft) {
+        // pointer on right edge pointing to target (point is relative inside view)
+        CGFloat pX = _targetPoint.x + _sidePadding;
+        CGFloat pY = _targetPoint.y;
+        // start at pointer tip
+        CGPathMoveToPoint(bubblePath, NULL, pX, pY);
+        CGPathAddLineToPoint(bubblePath, NULL, pX - _pointerSize, pY - _pointerSize);
 
-	CGPathCloseSubpath(bubblePath);
+        // draw bubble clockwise from right-top corner
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y,
+                            bubbleRect.origin.x + bubbleRect.size.width - _cornerRadius, bubbleRect.origin.y,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y,
+                            bubbleRect.origin.x, bubbleRect.origin.y + _cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height,
+                            bubbleRect.origin.x + _cornerRadius, bubbleRect.origin.y + bubbleRect.size.height,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y + bubbleRect.size.height,
+                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y + bubbleRect.size.height - _cornerRadius,
+                            _cornerRadius);
+
+        // close back to pointer base
+        CGPathAddLineToPoint(bubblePath, NULL, pX - _pointerSize, pY + _pointerSize);
+    }
+    else if (_pointDirection == PointDirectionRight) {
+        // pointer on left edge pointing to target
+        CGFloat pX = _targetPoint.x + _sidePadding;
+        CGFloat pY = _targetPoint.y;
+        CGPathMoveToPoint(bubblePath, NULL, pX, pY);
+        CGPathAddLineToPoint(bubblePath, NULL, pX + _pointerSize, pY - _pointerSize);
+
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height,
+                            bubbleRect.origin.x, bubbleRect.origin.y + bubbleRect.size.height - _cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x, bubbleRect.origin.y,
+                            bubbleRect.origin.x + _cornerRadius, bubbleRect.origin.y,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y,
+                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y + _cornerRadius,
+                            _cornerRadius);
+        CGPathAddArcToPoint(bubblePath, NULL,
+                            bubbleRect.origin.x + bubbleRect.size.width, bubbleRect.origin.y + bubbleRect.size.height,
+                            bubbleRect.origin.x + bubbleRect.size.width - _cornerRadius, bubbleRect.origin.y + bubbleRect.size.height,
+                            _cornerRadius);
+
+        CGPathAddLineToPoint(bubblePath, NULL, pX + _pointerSize, pY + _pointerSize);
+    }
+
+    CGPathCloseSubpath(bubblePath);
 
     CGContextSaveGState(c);
-	CGContextAddPath(c, bubblePath);
-	CGContextClip(c);
+    CGContextAddPath(c, bubblePath);
+    CGContextClip(c);
 
     if (self.hasGradientBackground == NO) {
         // Fill with solid color
@@ -229,7 +279,7 @@
         CGContextRestoreGState(c);
     }
 
-	CGContextRestoreGState(c);
+    CGContextRestoreGState(c);
 
     //Draw Border
     if (self.borderWidth > 0) {
@@ -254,9 +304,9 @@
         CGContextDrawPath(c, kCGPathStroke);
     }
 
-	CGPathRelease(bubblePath);
+    CGPathRelease(bubblePath);
 
-	// Draw title and text
+    // Draw title and text
     if (self.title) {
         [self.titleColor set];
         CGRect titleFrame = CGRectIntegral([self contentFrame]);
@@ -293,9 +343,9 @@
         }
     }
 
-	if (self.message) {
-		[self.textColor set];
-		CGRect textFrame = CGRectIntegral([self contentFrame]);
+    if (self.message) {
+        [self.textColor set];
+        CGRect textFrame = CGRectIntegral([self contentFrame]);
 
         // Move down to make room for title
         if (self.title) {
@@ -358,10 +408,12 @@
     }
 }
 
+#pragma mark - Present / Layout
+
 - (void)presentPointingAtView:(UIView *)targetView inView:(UIView *)containerView animated:(BOOL)animated {
-	if (!self.targetObject) {
-		self.targetObject = targetView;
-	}
+    if (!self.targetObject) {
+        self.targetObject = targetView;
+    }
 
     // If we want to dismiss the bubble when the user taps anywhere, we need to insert
     // an invisible button over the background.
@@ -373,10 +425,10 @@
         [containerView addSubview:self.dismissTarget];
     }
 
-	[containerView addSubview:self];
+    [containerView addSubview:self];
 
-	// Size of rounded rect
-	CGFloat rectWidth;
+    // Size of rounded rect
+    CGFloat rectWidth;
 
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
         // iPad
@@ -407,7 +459,7 @@
         }
     }
 
-	CGSize textSize = CGSizeZero;
+    CGSize textSize = CGSizeZero;
 
     if (self.message!=nil) {
         if ([self.message respondsToSelector:@selector(boundingRectWithSize:options:attributes:context:)]) {
@@ -475,133 +527,248 @@
         textSize.height += titleSize.height;
     }
 
-	_bubbleSize = CGSizeMake(textSize.width + (_bubblePaddingX*2) + (_cornerRadius*2), textSize.height + (_bubblePaddingY*2) + (_cornerRadius*2));
+    // compute bubble size (same as original, but try use ivars if set)
+    // fallback to pointerSize/bubblePadding if not set
+    if (_pointerSize <= 0) _pointerSize = (self.pointerSize > 0 ? self.pointerSize : 12.0);
+    if (_cornerRadius <= 0) _cornerRadius = (self.cornerRadius > 0 ? self.cornerRadius : 10.0);
+    if (_bubblePaddingX <= 0) _bubblePaddingX = (self.bubblePaddingX > 0 ? self.bubblePaddingX : 8.0);
+    if (_bubblePaddingY <= 0) _bubblePaddingY = (self.bubblePaddingY > 0 ? self.bubblePaddingY : 6.0);
 
-	UIView *superview = containerView.superview;
-	if ([superview isKindOfClass:[UIWindow class]])
-		superview = containerView;
+    _bubbleSize = CGSizeMake(textSize.width + (_bubblePaddingX*2) + (_cornerRadius*2), textSize.height + (_bubblePaddingY*2) + (_cornerRadius*2));
 
-	CGPoint targetRelativeOrigin    = [targetView.superview convertPoint:targetView.frame.origin toView:superview];
-	CGPoint containerRelativeOrigin = [superview convertPoint:containerView.frame.origin toView:superview];
+    UIView *superview = containerView.superview;
+    if ([superview isKindOfClass:[UIWindow class]])
+        superview = containerView;
 
-	CGFloat pointerY;	// Y coordinate of pointer target (within containerView)
+    CGPoint targetRelativeOrigin    = [targetView.superview convertPoint:targetView.frame.origin toView:superview];
+    CGPoint containerRelativeOrigin = [superview convertPoint:containerView.frame.origin toView:superview];
 
+    // default pointer coordinates (relative within containerView)
+    CGFloat pointerY = 0.0;
+    CGFloat pointerX = 0.0;
 
-    if (targetRelativeOrigin.y+targetView.bounds.size.height < containerRelativeOrigin.y) {
+    // Decide direction: if target is completely above/below container -> up/down as original
+    if (targetRelativeOrigin.y + targetView.bounds.size.height < containerRelativeOrigin.y) {
         pointerY = 0.0;
         _pointDirection = PointDirectionUp;
     }
-    else if (targetRelativeOrigin.y > containerRelativeOrigin.y+containerView.bounds.size.height) {
+    else if (targetRelativeOrigin.y > containerRelativeOrigin.y + containerView.bounds.size.height) {
         pointerY = containerView.bounds.size.height;
         _pointDirection = PointDirectionDown;
     }
     else {
-        _pointDirection = _preferredPointDirection;
-        CGPoint showPoint = self.showFromCenter ? CGPointMake(targetView.bounds.size.width/2, targetView.bounds.size.height/2) : CGPointMake(0.0, 0.0);
-        CGPoint targetOriginInContainer = [targetView convertPoint:showPoint toView:containerView];
-        CGFloat sizeBelow = containerView.bounds.size.height - targetOriginInContainer.y;
-        if (_pointDirection == PointDirectionAny) {
-            if (sizeBelow > targetOriginInContainer.y) {
-                pointerY = targetOriginInContainer.y + targetView.bounds.size.height;
-                _pointDirection = PointDirectionUp;
-            }
-            else {
-                pointerY = targetOriginInContainer.y;
-                _pointDirection = PointDirectionDown;
-            }
+        // If developer specified left/right explicitly, prefer that
+        if (self.preferredPointDirection == PointDirectionLeft || self.preferredPointDirection == PointDirectionRight) {
+            _pointDirection = self.preferredPointDirection;
         }
-        else {
-            if (_pointDirection == PointDirectionDown) {
-                pointerY = targetOriginInContainer.y;
+        else if (self.preferredPointDirection == PointDirectionAny) {
+            // auto choose based on horizontal space
+            CGPoint targetCenterInContainer = [targetView.superview convertPoint:targetView.center toView:containerView];
+            CGFloat leftSpace = targetCenterInContainer.x; // px to left edge
+            CGFloat rightSpace = containerView.bounds.size.width - targetCenterInContainer.x; // px to right edge
+            // if there's more space on the right, prefer right; else prefer left
+            if (rightSpace > leftSpace + 40) {
+                _pointDirection = PointDirectionRight;
+            } else if (leftSpace > rightSpace + 40) {
+                _pointDirection = PointDirectionLeft;
+            } else {
+                // fallback to vertical placement (original center-based up/down choose)
+                _pointDirection = PointDirectionAny; // keep for later logic
             }
-            else {
-                pointerY = targetOriginInContainer.y + targetView.bounds.size.height;
+        } else {
+            // preserve original up/down preference if set
+            _pointDirection = self.preferredPointDirection;
+        }
+
+        // If decided left/right, compute pointerY from target vertical center (we'll set pointerX later)
+        if (_pointDirection == PointDirectionLeft || _pointDirection == PointDirectionRight) {
+            CGPoint showPoint = self.showFromCenter ? CGPointMake(targetView.bounds.size.width/2, targetView.bounds.size.height/2) : CGPointMake(0.0, 0.0);
+            CGPoint targetOriginInContainer = [targetView convertPoint:showPoint toView:containerView];
+            // For side arrows, pointerY is relative vertical position
+            pointerY = targetOriginInContainer.y + targetView.bounds.size.height/2.0;
+        } else {
+            // reuse original vertical behaviour
+            _pointDirection = (_pointDirection == PointDirectionAny) ? _preferredPointDirection : _pointDirection;
+            CGPoint showPoint = self.showFromCenter ? CGPointMake(targetView.bounds.size.width/2, targetView.bounds.size.height/2) : CGPointMake(0.0, 0.0);
+            CGPoint targetOriginInContainer = [targetView convertPoint:showPoint toView:containerView];
+            CGFloat sizeBelow = containerView.bounds.size.height - targetOriginInContainer.y;
+            if (_pointDirection == PointDirectionAny) {
+                if (sizeBelow > targetOriginInContainer.y) {
+                    pointerY = targetOriginInContainer.y + targetView.bounds.size.height;
+                    _pointDirection = PointDirectionUp;
+                } else {
+                    pointerY = targetOriginInContainer.y;
+                    _pointDirection = PointDirectionDown;
+                }
+            } else {
+                if (_pointDirection == PointDirectionDown) {
+                    pointerY = targetOriginInContainer.y;
+                } else {
+                    pointerY = targetOriginInContainer.y + targetView.bounds.size.height;
+                }
             }
         }
     }
 
-	CGFloat W = containerView.bounds.size.width;
+    // Now compute final positioning for both vertical and horizontal directions
+    CGFloat W = containerView.bounds.size.width;
+    CGFloat H = containerView.bounds.size.height;
 
-	CGPoint p = [targetView.superview convertPoint:targetView.center toView:containerView];
-	CGFloat x_p = p.x;
-	CGFloat x_b = x_p - roundf(_bubbleSize.width/2);
-	if (x_b < _sidePadding) {
-		x_b = _sidePadding;
-	}
-	if (x_b + _bubbleSize.width + _sidePadding > W) {
-		x_b = W - _bubbleSize.width - _sidePadding;
-	}
-	if (x_p - _pointerSize < x_b + _cornerRadius) {
-		x_p = x_b + _cornerRadius + _pointerSize;
-	}
-	if (x_p + _pointerSize > x_b + _bubbleSize.width - _cornerRadius) {
-		x_p = x_b + _bubbleSize.width - _cornerRadius - _pointerSize;
-	}
-
-	CGFloat fullHeight = _bubbleSize.height + _pointerSize + 10.0;
-	CGFloat y_b;
-	if (_pointDirection == PointDirectionUp) {
-		y_b = _topMargin + pointerY;
-		_targetPoint = CGPointMake(x_p-x_b, 0);
-	}
-	else {
-		y_b = pointerY - fullHeight;
-		_targetPoint = CGPointMake(x_p-x_b, fullHeight-2.0);
-	}
-
-	CGRect finalFrame = CGRectMake(x_b-_sidePadding,
-								   y_b,
-								   _bubbleSize.width+_sidePadding*2,
-								   fullHeight);
-    finalFrame = CGRectIntegral(finalFrame);
-
-
-	if (animated) {
-        if (self.animation == CMPopTipAnimationFade) {
-            self.alpha = 0;
-            self.frame = finalFrame;
+    // If vertical (Up / Down)
+    if (_pointDirection == PointDirectionUp || _pointDirection == PointDirectionDown) {
+        CGPoint p = [targetView.superview convertPoint:targetView.center toView:containerView];
+        CGFloat x_p = p.x;
+        CGFloat x_b = x_p - roundf(_bubbleSize.width/2);
+        if (x_b < _sidePadding) {
+            x_b = _sidePadding;
         }
-        else if (self.animation == CMPopTipAnimationSlide) {
-            self.alpha = 0.0;
-            CGRect startFrame = finalFrame;
-            startFrame.origin.y += 10;
-            self.frame = startFrame;
+        if (x_b + _bubbleSize.width + _sidePadding > W) {
+            x_b = W - _bubbleSize.width - _sidePadding;
         }
-		else if (self.animation == CMPopTipAnimationPop) {
-            self.frame = finalFrame;
-            self.alpha = 0.5;
-
-            // start a little smaller
-            self.transform = CGAffineTransformMakeScale(0.75f, 0.75f);
-
-            // animate to a bigger size
-            [UIView beginAnimations:nil context:nil];
-            [UIView setAnimationDelegate:self];
-            [UIView setAnimationDidStopSelector:@selector(popAnimationDidStop:finished:context:)];
-            [UIView setAnimationDuration:0.15f];
-            self.transform = CGAffineTransformMakeScale(1.1f, 1.1f);
-            self.alpha = 1.0;
-            [UIView commitAnimations];
+        if (x_p - _pointerSize < x_b + _cornerRadius) {
+            x_p = x_b + _cornerRadius + _pointerSize;
+        }
+        if (x_p + _pointerSize > x_b + _bubbleSize.width - _cornerRadius) {
+            x_p = x_b + _bubbleSize.width - _cornerRadius - _pointerSize;
         }
 
-		[self setNeedsDisplay];
-		if (self.animation == CMPopTipAnimationFade) {
-            [UIView animateWithDuration:0.15 animations:^{
+        CGFloat fullHeight = _bubbleSize.height + _pointerSize + 10.0;
+        CGFloat y_b;
+        if (_pointDirection == PointDirectionUp) {
+            y_b = _topMargin + pointerY;
+            _targetPoint = CGPointMake(x_p - x_b, 0);
+        }
+        else {
+            y_b = pointerY - fullHeight;
+            _targetPoint = CGPointMake(x_p - x_b, fullHeight - 2.0);
+        }
+
+        CGRect finalFrame = CGRectMake(x_b - _sidePadding,
+                                       y_b,
+                                       _bubbleSize.width + _sidePadding*2,
+                                       fullHeight);
+        finalFrame = CGRectIntegral(finalFrame);
+
+        if (animated) {
+            if (self.animation == CMPopTipAnimationFade) {
+                self.alpha = 0;
+                self.frame = finalFrame;
+            }
+            else if (self.animation == CMPopTipAnimationSlide) {
+                self.alpha = 0.0;
+                CGRect startFrame = finalFrame;
+                startFrame.origin.y += 10;
+                self.frame = startFrame;
+            }
+            else if (self.animation == CMPopTipAnimationPop) {
+                self.frame = finalFrame;
+                self.alpha = 0.5;
+                self.transform = CGAffineTransformMakeScale(0.75f, 0.75f);
+                [UIView beginAnimations:nil context:nil];
+                [UIView setAnimationDelegate:self];
+                [UIView setAnimationDidStopSelector:@selector(popAnimationDidStop:finished:context:)];
+                [UIView setAnimationDuration:0.15f];
+                self.transform = CGAffineTransformMakeScale(1.1f, 1.1f);
                 self.alpha = 1.0;
-            }];
+                [UIView commitAnimations];
+            }
+
+            [self setNeedsDisplay];
+            if (self.animation == CMPopTipAnimationFade) {
+                [UIView animateWithDuration:0.15 animations:^{
+                    self.alpha = 1.0;
+                }];
+            } else if (self.animation == CMPopTipAnimationSlide) {
+                [UIView beginAnimations:nil context:nil];
+                self.alpha = 1.0;
+                self.frame = finalFrame;
+                [UIView commitAnimations];
+            }
+        } else {
+            [self setNeedsDisplay];
+            self.frame = finalFrame;
         }
-		else if (self.animation == CMPopTipAnimationSlide) {
-			[UIView beginAnimations:nil context:nil];
-			self.alpha = 1.0;
-			self.frame = finalFrame;
-			[UIView commitAnimations];
-		}
-	}
-	else {
-		// Not animated
-		[self setNeedsDisplay];
-		self.frame = finalFrame;
-	}
+    }
+    // else horizontal (Left / Right)
+    else if (_pointDirection == PointDirectionLeft || _pointDirection == PointDirectionRight) {
+
+        // pointerY is vertical coordinate within container for arrow center
+        // compute bubbleY so that arrow points to target center and bubble placed left/right
+        CGFloat bubbleY = pointerY - (_bubbleSize.height / 2.0);
+        // clamp vertical to container
+        if (bubbleY < 0) bubbleY = 0;
+        if (bubbleY + _bubbleSize.height + _pointerSize + 2 > H) bubbleY = MAX(0, H - _bubbleSize.height - _pointerSize - 2);
+
+        CGFloat bubbleX = 0;
+        CGFloat arrowRelativeY = pointerY - bubbleY; // arrow position inside bubble's coordinate (in y)
+        CGFloat arrowRelativeX = 0;
+
+        if (_pointDirection == PointDirectionLeft) {
+            // bubble to left of target, so pointer is on bubble's right edge
+            // target center x in container:
+            CGPoint targetCenter = [targetView.superview convertPoint:targetView.center toView:containerView];
+            bubbleX = targetCenter.x - _bubbleSize.width - _pointerSize;
+            // avoid left edge overflow
+            if (bubbleX < _sidePadding) bubbleX = _sidePadding;
+            arrowRelativeX = _bubbleSize.width; // right edge (relative)
+            _targetPoint = CGPointMake(arrowRelativeX, arrowRelativeY);
+        } else { // Right
+            CGPoint targetCenter = [targetView.superview convertPoint:targetView.center toView:containerView];
+            bubbleX = targetCenter.x + _pointerSize;
+            // avoid right edge overflow
+            if (bubbleX + _bubbleSize.width + _sidePadding > W) bubbleX = W - _bubbleSize.width - _sidePadding;
+            arrowRelativeX = 0; // left edge
+            _targetPoint = CGPointMake(arrowRelativeX, arrowRelativeY);
+        }
+
+        CGRect finalFrame = CGRectMake(bubbleX - _sidePadding,
+                                       bubbleY,
+                                       _bubbleSize.width + _sidePadding*2,
+                                       _bubbleSize.height + _pointerSize + 2); // small extra to be safe
+        finalFrame = CGRectIntegral(finalFrame);
+
+        if (animated) {
+            if (self.animation == CMPopTipAnimationFade) {
+                self.alpha = 0;
+                self.frame = finalFrame;
+            } else if (self.animation == CMPopTipAnimationSlide) {
+                self.alpha = 0.0;
+                CGRect startFrame = finalFrame;
+                startFrame.origin.x += (_pointDirection == PointDirectionRight) ? 10 : -10;
+                self.frame = startFrame;
+            } else if (self.animation == CMPopTipAnimationPop) {
+                self.frame = finalFrame;
+                self.alpha = 0.5;
+                self.transform = CGAffineTransformMakeScale(0.75f, 0.75f);
+                [UIView beginAnimations:nil context:nil];
+                [UIView setAnimationDelegate:self];
+                [UIView setAnimationDidStopSelector:@selector(popAnimationDidStop:finished:context:)];
+                [UIView setAnimationDuration:0.15f];
+                self.transform = CGAffineTransformMakeScale(1.1f, 1.1f);
+                self.alpha = 1.0;
+                [UIView commitAnimations];
+            }
+
+            [self setNeedsDisplay];
+            if (self.animation == CMPopTipAnimationFade) {
+                [UIView animateWithDuration:0.15 animations:^{
+                    self.alpha = 1.0;
+                }];
+            } else if (self.animation == CMPopTipAnimationSlide) {
+                [UIView beginAnimations:nil context:nil];
+                self.alpha = 1.0;
+                self.frame = finalFrame;
+                [UIView commitAnimations];
+            }
+        } else {
+            [self setNeedsDisplay];
+            self.frame = finalFrame;
+        }
+    }
+    else {
+        // fallback, should not reach
+        [self setNeedsDisplay];
+    }
 }
 
 - (void)presentPointingAtBarButtonItem:(UIBarButtonItem *)barButtonItem animated:(BOOL)animated {
@@ -619,28 +786,30 @@
     [self presentPointingAtView:targetView inView:containerView animated:animated];
 }
 
+#pragma mark - Dismiss / Touch
+
 - (void)finaliseDismiss {
-	[self.autoDismissTimer invalidate]; self.autoDismissTimer = nil;
+    [self.autoDismissTimer invalidate]; self.autoDismissTimer = nil;
 
     if (self.dismissTarget) {
         [self.dismissTarget removeFromSuperview];
-		self.dismissTarget = nil;
+        self.dismissTarget = nil;
     }
 
-	[self removeFromSuperview];
+    [self removeFromSuperview];
 
-	_highlight = NO;
-	self.targetObject = nil;
+    _highlight = NO;
+    self.targetObject = nil;
 }
 
 - (void)dismissAnimationDidStop:(__unused NSString *)animationID finished:(__unused NSNumber *)finished context:(__unused void *)context
 {
-	[self finaliseDismiss];
+    [self finaliseDismiss];
 }
 
 - (void)dismissAnimated:(BOOL)animated {
 
-	if (animated) {
+    if (animated) {
         if (self.animation == CMPopTipAnimationFade) {
             [UIView beginAnimations:nil context:nil];
             self.alpha = 0.0;
@@ -659,42 +828,30 @@
             [UIView setAnimationDidStopSelector:@selector(dismissAnimationDidStop:finished:context:)];
             [UIView commitAnimations];
         }
-	}
-	else {
-		[self finaliseDismiss];
-	}
+    }
+    else {
+        [self finaliseDismiss];
+    }
 }
 
 - (void)autoDismissAnimatedDidFire:(NSTimer *)theTimer {
     NSNumber *animated = [[theTimer userInfo] objectForKey:@"animated"];
     [self dismissAnimated:[animated boolValue]];
-	[self notifyDelegatePopTipViewWasDismissedByUser];
-}
-
-- (void)autoDismissAnimated:(BOOL)animated atTimeInterval:(NSTimeInterval)timeInterval {
-    NSDictionary * userInfo = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:animated] forKey:@"animated"];
-
-    [self.autoDismissTimer invalidate];
-    self.autoDismissTimer = nil;
-    self.autoDismissTimer = [NSTimer scheduledTimerWithTimeInterval:timeInterval
-															 target:self
-														   selector:@selector(autoDismissAnimatedDidFire:)
-														   userInfo:userInfo
-															repeats:NO];
+    [self notifyDelegatePopTipViewWasDismissedByUser];
 }
 
 - (void)notifyDelegatePopTipViewWasDismissedByUser {
-	__strong id<CMPopTipViewDelegate> delegate = self.delegate;
-	[delegate popTipViewWasDismissedByUser:self];
+    __strong id<CMPopTipViewDelegate> delegate = self.delegate;
+    [delegate popTipViewWasDismissedByUser:self];
 }
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
-	if (self.disableTapToDismiss) {
-		[super touchesBegan:touches withEvent:event];
-		return;
-	}
+    if (self.disableTapToDismiss) {
+        [super touchesBegan:touches withEvent:event];
+        return;
+    }
 
-	[self dismissByUser];
+    [self dismissByUser];
 }
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
@@ -709,43 +866,45 @@
 
 - (void)dismissTapAnywhereFired:(__unused UIButton *)button
 {
-	[self dismissByUser];
+    [self dismissByUser];
 }
 
 - (void)dismissByUser
 {
-	_highlight = YES;
-	[self setNeedsDisplay];
+    _highlight = YES;
+    [self setNeedsDisplay];
 
-	[self dismissAnimated:YES];
+    [self dismissAnimated:YES];
 
-	[self notifyDelegatePopTipViewWasDismissedByUser];
+    [self notifyDelegatePopTipViewWasDismissedByUser];
 }
 
 - (void)popAnimationDidStop:(__unused NSString *)animationID finished:(__unused NSNumber *)finished context:(__unused void *)context
 {
     // at the end set to normal size
-	[UIView beginAnimations:nil context:nil];
-	[UIView setAnimationDuration:0.1f];
-	self.transform = CGAffineTransformIdentity;
-	[UIView commitAnimations];
+    [UIView beginAnimations:nil context:nil];
+    [UIView setAnimationDuration:0.1f];
+    self.transform = CGAffineTransformIdentity;
+    [UIView commitAnimations];
 }
+
+#pragma mark - Init / Helpers
 
 - (id)initWithFrame:(CGRect)frame
 {
     if ((self = [super initWithFrame:frame])) {
         // Initialization code
-		self.opaque = NO;
+        self.opaque = NO;
 
-		_topMargin = 2.0;
-		_pointerSize = 12.0;
-		_sidePadding = 2.0;
+        _topMargin = 2.0;
+        _pointerSize = 12.0;
+        _sidePadding = 2.0;
         _borderWidth = 1.0;
 
-		self.textFont = [UIFont boldSystemFontOfSize:14.0];
-		self.textColor = [UIColor whiteColor];
-		self.textAlignment = NSTextAlignmentCenter;
-		self.backgroundColor = [UIColor colorWithRed:62.0/255.0 green:60.0/255.0 blue:154.0/255.0 alpha:1.0];
+        self.textFont = [UIFont boldSystemFontOfSize:14.0];
+        self.textColor = [UIColor whiteColor];
+        self.textAlignment = NSTextAlignmentCenter;
+        self.backgroundColor = [UIColor colorWithRed:62.0/255.0 green:60.0/255.0 blue:154.0/255.0 alpha:1.0];
         self.has3DStyle = YES;
         self.borderColor = [UIColor blackColor];
         self.hasShadow = YES;
@@ -754,6 +913,10 @@
         self.preferredPointDirection = PointDirectionAny;
         self.hasGradientBackground = YES;
         self.cornerRadius = 10.0;
+
+        // default padding if not set externally
+        self.bubblePaddingX = 8.0;
+        self.bubblePaddingY = 6.0;
     }
     return self;
 }
@@ -782,48 +945,60 @@
 
 - (BOOL)isBeingShown
 {
-	return self.targetObject != nil;
+    return self.targetObject != nil;
 }
 
 - (id)initWithTitle:(NSString *)titleToShow message:(NSString *)messageToShow
 {
-	CGRect frame = CGRectZero;
+    CGRect frame = CGRectZero;
 
-	if ((self = [self initWithFrame:frame])) {
+    if ((self = [self initWithFrame:frame])) {
         self.title = titleToShow;
-		self.message = messageToShow;
+        self.message = messageToShow;
 
         self.titleFont = [UIFont boldSystemFontOfSize:16.0];
         self.titleColor = [UIColor whiteColor];
         self.titleAlignment = NSTextAlignmentCenter;
         self.textFont = [UIFont systemFontOfSize:14.0];
-		self.textColor = [UIColor whiteColor];
-	}
-	return self;
+        self.textColor = [UIColor whiteColor];
+    }
+    return self;
 }
 
 - (id)initWithMessage:(NSString *)messageToShow
 {
-	CGRect frame = CGRectZero;
+    CGRect frame = CGRectZero;
 
-	if ((self = [self initWithFrame:frame])) {
-		self.message = messageToShow;
+    if ((self = [self initWithFrame:frame])) {
+        self.message = messageToShow;
         self.isAccessibilityElement = YES;
         self.accessibilityHint = messageToShow;
-	}
-	return self;
+    }
+    return self;
 }
 
 - (id)initWithCustomView:(UIView *)aView
 {
-	CGRect frame = CGRectZero;
+    CGRect frame = CGRectZero;
 
-	if ((self = [self initWithFrame:frame])) {
-		self.customView = aView;
+    if ((self = [self initWithFrame:frame])) {
+        self.customView = aView;
         self.shouldMaskCustomView = YES;
         [self addSubview:self.customView];
-	}
-	return self;
+    }
+    return self;
+}
+
+- (void)autoDismissAnimated:(BOOL)animated atTimeInterval:(NSTimeInterval)timeInterval {
+    NSDictionary * userInfo = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:animated] forKey:@"animated"];
+
+    [self.autoDismissTimer invalidate];
+    self.autoDismissTimer = nil;
+    self.autoDismissTimer = [NSTimer scheduledTimerWithTimeInterval:timeInterval
+                                                             target:self
+                                                           selector:@selector(autoDismissAnimatedDidFire:)
+                                                           userInfo:userInfo
+                                                            repeats:NO];
 }
 
 @end

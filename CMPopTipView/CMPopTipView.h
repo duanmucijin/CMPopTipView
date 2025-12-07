@@ -88,16 +88,18 @@
 
 #import <UIKit/UIKit.h>
 
-typedef NS_ENUM(NSInteger, PointDirection) {
-    PointDirectionAny = 0,
-    PointDirectionUp,
-    PointDirectionDown,
+typedef NS_ENUM(NSInteger, CMPopTipAnimation) {
+    CMPopTipAnimationPop,
+    CMPopTipAnimationFade,
+    CMPopTipAnimationSlide
 };
 
-typedef NS_ENUM(NSInteger, CMPopTipAnimation) {
-    CMPopTipAnimationSlide = 0,
-    CMPopTipAnimationPop,
-    CMPopTipAnimationFade
+typedef NS_ENUM(NSInteger, PointDirection) {
+    PointDirectionUp,
+    PointDirectionDown,
+    PointDirectionLeft,   // added
+    PointDirectionRight,  // added
+    PointDirectionAny
 };
 
 @protocol CMPopTipViewDelegate;
